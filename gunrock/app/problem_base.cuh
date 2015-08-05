@@ -14,6 +14,21 @@
 
 #pragma once
 
+#include <vector>
+#include <string>
+
+// Graph construction utilities
+#include <gunrock/graphio/market.cuh>
+#include <gunrock/graphio/rmat.cuh>
+#include <gunrock/graphio/rgg.cuh>
+
+// Information stats utilities
+#include <boost/filesystem.hpp>
+#include <gunrock/util/sysinfo.h>
+#include <gunrock/util/gitsha1.h>
+#include <gunrock/util/json_spirit_writer_template.h>
+
+// Gunrock test error utilities
 #include <gunrock/util/basic_utils.h>
 #include <gunrock/util/cuda_properties.cuh>
 #include <gunrock/util/memset_kernel.cuh>
@@ -24,16 +39,20 @@
 #include <gunrock/util/io/modified_store.cuh>
 #include <gunrock/util/array_utils.cuh>
 #include <gunrock/util/test_utils.cuh>
+#include <gunrock/util/test_utils.h>
+
+// Graph partitioner utilities
 #include <gunrock/app/rp/rp_partitioner.cuh>
 #include <gunrock/app/cp/cp_partitioner.cuh>
 #include <gunrock/app/brp/brp_partitioner.cuh>
 #include <gunrock/app/metisp/metis_partitioner.cuh>
-#include <gunrock/util/json_spirit_writer_template.h>
 #include <gunrock/app/sp/sp_partitioner.cuh>
-#include <vector>
-#include <string>
 
 #include <moderngpu.cuh>
+
+// this is the "stringize macro macro" hack
+#define STR(x) #x
+#define XSTR(x) STR(x)
 
 namespace gunrock {
 namespace app {
@@ -51,9 +70,9 @@ enum FrontierType
 /**
  * @brief Graph slice structure which contains common graph structural data.
  *
- * @tparam SizeT               Type of unsigned integer to use for array indexing. (e.g., uint32)
- * @tparam VertexId            Type of signed integer to use as vertex id (e.g., uint32)
- * @tparam Value               Type to use as vertex / edge associated values
+ * @tparam SizeT    Type of unsigned integer to use for array indexing. (e.g., uint32)
+ * @tparam VertexId Type of signed integer to use as vertex id (e.g., uint32)
+ * @tparam Value    Type to use as vertex / edge associated values
  */
 template <
     typename SizeT,
@@ -839,7 +858,7 @@ struct DataSliceBase
 
         // Determine frontier queue sizes
         SizeT new_frontier_elements[2] = {0, 0};
-        if (num_gpus > 1) util::cpu_mt::PrintCPUArray<int, SizeT>("in_counter", graph_slice->in_counter.GetPointer(util::HOST), num_gpus + 1, gpu_idx);
+        // if (num_gpus > 1) util::cpu_mt::PrintCPUArray<int, SizeT>("in_counter", graph_slice->in_counter.GetPointer(util::HOST), num_gpus + 1, gpu_idx);
 
         for (int peer = 0; peer < (num_gpus > 1 ? num_gpus + 1 : 1); peer++)
             for (int i = 0; i < 2; i++)
@@ -1156,11 +1175,11 @@ struct ProblemBase
         // Cleanup graph slices on the heap
         for (int i = 0; i < num_gpus; ++i)
         {
-            delete   graph_slices     [i  ]; graph_slices     [i  ] = NULL;
+            delete graph_slices[i]; graph_slices[i] = NULL;
         }
         if (num_gpus > 1)
         {
-            delete   partitioner;           partitioner          = NULL;
+            delete partitioner; partitioner = NULL;
         }
         delete[] graph_slices; graph_slices = NULL;
         delete[] gpu_idx;      gpu_idx      = NULL;
@@ -1265,21 +1284,34 @@ struct ProblemBase
                 // printf("partition_method = %s\n", partition_method.c_str());
 
                 if (partition_method == "random")
-                    partitioner = new rp::RandomPartitioner   <VertexId, SizeT, Value, _ENABLE_BACKWARD, _KEEP_ORDER, _KEEP_NODE_NUM>
+                {
+                    partitioner = new rp::RandomPartitioner<VertexId, SizeT, Value, _ENABLE_BACKWARD, _KEEP_ORDER, _KEEP_NODE_NUM>
                     (*graph, num_gpus);
+                }
                 else if (partition_method == "metis")
+                {
                     partitioner = new metisp::MetisPartitioner<VertexId, SizeT, Value, _ENABLE_BACKWARD, _KEEP_ORDER, _KEEP_NODE_NUM>
                     (*graph, num_gpus);
+                }
                 else if (partition_method == "static")
+                {
                     partitioner = new sp::StaticPartitioner<VertexId, SizeT, Value, _ENABLE_BACKWARD, _KEEP_ORDER, _KEEP_NODE_NUM>
                     (*graph, num_gpus);
+                }
                 else if (partition_method == "cluster")
-                    partitioner = new cp::ClusterPartitioner  <VertexId, SizeT, Value, _ENABLE_BACKWARD, _KEEP_ORDER, _KEEP_NODE_NUM>
+                {
+                   partitioner = new cp::ClusterPartitioner<VertexId, SizeT, Value, _ENABLE_BACKWARD, _KEEP_ORDER, _KEEP_NODE_NUM>
                     (*graph, num_gpus);
+                }
                 else if (partition_method == "biasrandom")
-                    partitioner = new brp::BiasRandomPartitioner <VertexId, SizeT, Value, _ENABLE_BACKWARD, _KEEP_ORDER, _KEEP_NODE_NUM>
+                {
+                    partitioner = new brp::BiasRandomPartitioner<VertexId, SizeT, Value, _ENABLE_BACKWARD, _KEEP_ORDER, _KEEP_NODE_NUM>
                     (*graph, num_gpus);
-                else util::GRError("partition_method invalid", __FILE__, __LINE__);
+                }
+                else
+                {
+                    util::GRError("partition_method invalid", __FILE__, __LINE__);
+                }
                 cpu_timer.Start();
                 retval = partitioner->Partition(
                              sub_graphs,
@@ -1340,6 +1372,7 @@ struct ProblemBase
                 if (num_gpus > 1)
                 {
                     if (_ENABLE_BACKWARD)
+                    {
                         retval = graph_slices[gpu]->Init(
                                      stream_from_host,
                                      num_gpus,
@@ -1354,7 +1387,9 @@ struct ProblemBase
                                      backward_offsets    [gpu],
                                      backward_partitions [gpu],
                                      backward_convertions[gpu]);
+                    }
                     else
+                    {
                         retval = graph_slices[gpu]->Init(
                                      stream_from_host,
                                      num_gpus,
@@ -1369,8 +1404,11 @@ struct ProblemBase
                                      NULL,
                                      NULL,
                                      NULL);
+                    }
                 }
-                else retval = graph_slices[gpu]->Init(
+                else
+                {
+                    retval = graph_slices[gpu]->Init(
                                       stream_from_host,
                                       num_gpus,
                                       &(sub_graphs[gpu]),
@@ -1384,6 +1422,7 @@ struct ProblemBase
                                       NULL,
                                       NULL,
                                       NULL);
+                }
                 if (retval) break;
             }  // end for (gpu)
 

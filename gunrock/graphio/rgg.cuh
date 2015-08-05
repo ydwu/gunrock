@@ -42,7 +42,12 @@ public:
     long long node;
 
     RggPoint() {}
-    RggPoint(double x, double y, long long node) {this->x = x; this->y = y; this->node = node;}
+    RggPoint(double x, double y, long long node)
+    {
+        this->x = x;
+        this->y = y;
+        this->node = node;
+    }
 };
 
 //inline bool operator< (const RggPoint& lhs, const RggPoint& rhs)
@@ -93,7 +98,8 @@ int BuildRggGraph(
     bool   undirected = true,
     double value_multipiler = 1,
     double value_min        = 1,
-    int    seed             = -1)
+    int    seed             = -1,
+    bool   quiet = false)
 {
     typedef Coo<VertexId, Value> EdgeTupleType;
 
@@ -125,7 +131,7 @@ int BuildRggGraph(
     long long initial_length   = reserved_factor2 * nodes / row_length / row_length;
 
     if (seed == -1) seed = time(NULL);
-    printf("rgg seed = %lld\n", (long long)seed);
+    if (!quiet) { printf("rgg seed = %lld\n", (long long)seed); }
     if (initial_length <4) initial_length = 4;
     for (SizeT i=0; i< row_length * row_length +1; i++)
     {
@@ -149,16 +155,29 @@ int BuildRggGraph(
         VertexId *col_index   = col_index_ + reserved_size * node_start;
         Value    *values      = WITH_VALUES ? values_ + reserved_size * node_start : NULL;
         unsigned int seed_    = seed + 805 * thread_num;
+#ifdef USE_STD_RANDOM
+        rand_data.engine = std::mt19937_64(seed_);
+        rand_data.dist = std::uniform_real_distribution<double>(0.0, 1.0);
+#else
         srand48_r(seed_, &rand_data);
+#endif
         #pragma omp single
             offsets           = new SizeT[num_threads+1];
 
         for (VertexId node = node_start; node < node_end; node++)
         {
             double t_value;
+#ifdef USE_STD_RANDOM
+            t_value = rand_data.dist(rand_data.engine);
+#else
             drand48_r(&rand_data, &t_value);
+#endif
             points[node].x = t_value;
+#ifdef USE_STD_RANDOM
+            t_value = rand_data.dist(rand_data.engine);
+#else
             drand48_r(&rand_data, &t_value);
+#endif
             points[node].y = t_value;
             points[node].node = node;
         }
@@ -242,7 +261,11 @@ int BuildRggGraph(
                     if (WITH_VALUES)
                     {
                         double t_value;
+#ifdef USE_STD_RANDOM
+                        t_value = rand_data.dist(rand_data.engine);
+#else
                         drand48_r(&rand_data, &t_value);
+#endif
                         values[counter] = t_value * value_multipiler + value_min;
                     }
                     counter++;
@@ -317,7 +340,7 @@ int BuildRggGraph(
 
     char *out_file = NULL;
     graph.template FromCoo<WITH_VALUES, EdgeTupleType>(
-        out_file, coo, nodes, edges);
+        out_file, coo, nodes, edges, false, undirected, false, quiet);
 
     //delete[] co_x       ; co_x        = NULL;
     //delete[] co_y       ; co_y        = NULL;
@@ -328,7 +351,7 @@ int BuildRggGraph(
     delete[] block_size ; block_size  = NULL;
     delete[] block_length; block_length = NULL;
     delete[] col_index_ ; col_index_  = NULL;
-    if (WITH_VALUES) {delete[] values_; values_ = NULL;}
+    if (WITH_VALUES) { delete[] values_; values_ = NULL; }
     free(coo); coo=NULL;
 
     return 0;

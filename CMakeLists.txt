@@ -180,6 +180,13 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   set(CUDA_PROPAGATE_HOST_FLAGS OFF)
   set(CMAKE_CXX_FLAGS -std=c++11)
   set(CUDA_NVCC_FLAGS -std=c++11)
+
+  if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+    #added for Boost and OpenMP on OS X
+    link_directories("/opt/local/lib")
+    include_directories("/opt/local/include")
+  endif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+
 endif(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 
 if(GUNROCK_BUILD_LIB)
@@ -251,8 +258,9 @@ add_test(NAME TEST_TOPK COMMAND degree_centrality market
   ${gunrock_INCLUDE_DIRS}/simple_example/bips98_606.mtx --undirected)
 set_tests_properties(TEST_TOPK PROPERTIES PASS_REGULAR_EXPRESSION "CORRECT")
 
+# bips98_606.mtx is not fully-connected graph so use largest small graph instead
 add_test(NAME TEST_MST COMMAND minimum_spanning_tree market
-  ${gunrock_INCLUDE_DIRS}/simple_example/bips98_606.mtx)
+  ${gunrock_INCLUDE_DIRS}/dataset/small/chesapeake.mtx)
 set_tests_properties(TEST_MST PROPERTIES PASS_REGULAR_EXPRESSION "CORRECT")
 
 ### shared library application interface tests

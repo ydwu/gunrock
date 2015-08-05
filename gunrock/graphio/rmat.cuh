@@ -31,7 +31,11 @@ namespace graphio {
 inline double Sprng (struct drand48_data *rand_data)
 {
     double result;
+#ifdef USE_STD_RANDOM
+    result = rand_data->dist(rand_data->engine);
+#else
     drand48_r(rand_data, &result);
+#endif
     return result;
 }
 
@@ -58,7 +62,7 @@ inline bool Flip (struct drand48_data *rand_data)
  * @param[in] rand_data
  */
 template <typename VertexId>
-void ChoosePartition (
+inline void ChoosePartition (
     VertexId *u, VertexId *v, VertexId step,
     double a, double b, double c, double d, struct drand48_data *rand_data)
 {
@@ -93,7 +97,7 @@ void ChoosePartition (
  * @param[in] d
  * @param[in] rand_data
  */
-void VaryParams(
+inline void VaryParams(
     double *a, double *b, double *c, double *d, drand48_data *rand_data)
 {
     double v, S;
@@ -163,7 +167,7 @@ void VaryParams(
  * @param[in] seed
  */
 template <bool WITH_VALUES, typename VertexId, typename Value, typename SizeT>
-int BuildRmatGraph (
+int BuildRmatGraph(
     SizeT nodes, SizeT edges,
     Csr<VertexId, Value, SizeT> &graph,
     bool undirected,
@@ -191,7 +195,10 @@ int BuildRmatGraph (
         sizeof(EdgeTupleType) * directed_edges);
 
     if (seed == -1) seed = time(NULL);
-    printf("rmat_seed = %lld\n", (long long)seed);
+    if (!quiet)
+    {
+        printf("rmat_seed = %lld\n", (long long)seed);
+    }
 
     //omp_set_num_threads(2);
     #pragma omp parallel
@@ -202,7 +209,12 @@ int BuildRmatGraph (
         SizeT i_start   = (long long )(edges) * thread_num / num_threads;
         SizeT i_end     = (long long )(edges) * (thread_num + 1) / num_threads;
         unsigned int seed_ = seed + 616 * thread_num;
+#ifdef USE_STD_RANDOM
+        rand_data.engine = std::mt19937_64(seed_);
+        rand_data.dist = std::uniform_real_distribution<double>(0.0, 1.0);
+#else
         srand48_r(seed_, &rand_data);
+#endif
 
         for (SizeT i = i_start; i < i_end; i++)
         {
@@ -234,7 +246,11 @@ int BuildRmatGraph (
             if (WITH_VALUES)
             {
                 double t_value;
+#ifdef USE_STD_RANDOM
+                t_value = rand_data.dist(rand_data.engine);
+#else
                 drand48_r(&rand_data, &t_value);
+#endif
                 coo_p->val = t_value * vmultipiler + vmin;
             } else coo_p->val = 1;
 
@@ -247,7 +263,11 @@ int BuildRmatGraph (
                 if (WITH_VALUES)
                 {
                     double t_value;
+#ifdef USE_STD_RANDOM
+                    t_value = rand_data.dist(rand_data.engine);
+#else
                     drand48_r(&rand_data, &t_value);
+#endif
                     cooi_p->val = t_value * vmultipiler + vmin;
                 } else coo_p->val = 1;
             }
@@ -257,7 +277,7 @@ int BuildRmatGraph (
     // convert COO to CSR
     char *out_file = NULL;  // TODO: currently does not support write CSR file
     graph.template FromCoo<WITH_VALUES, EdgeTupleType>(
-        out_file, coo, nodes, directed_edges, quiet);
+        out_file, coo, nodes, directed_edges, false, undirected, false, quiet);
 
     free(coo);
 

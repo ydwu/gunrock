@@ -522,7 +522,7 @@ static CUT_THREADPROC SSSPThread(
 
         gunrock::app::Iteration_Loop
             <Problem::MARK_PATHS? 1:0, 1, Enactor, Functor, SSSPIteration<AdvanceKernelPolicy, FilterKernelPolicy, Enactor> > (thread_data);
-        printf("SSSP_Thread finished\n");fflush(stdout);
+        //printf("SSSP_Thread finished\n");fflush(stdout);
 
     } while(0);
 
@@ -747,7 +747,7 @@ public:
             }
         } while(0);
 
-        if (this->DEBUG) printf("\nGPU SSSP Done.\n");
+        if (DEBUG) printf("\nGPU SSSP Done.\n");
         return retval;
     }
 
